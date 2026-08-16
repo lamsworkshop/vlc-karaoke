@@ -1,0 +1,8 @@
+# ~/.config/vlc/vlcrc
+# make these changes to your VLC configurations/Settings
+# VLC media player 3.0.23 Vetinari (revision 3.0.23-2-0-g79128878dd)
+
+extraintf=http:luaintf
+lua-intf=karaoke
+http-password=1234
+#loop=1

@@ -1,0 +1,286 @@
+<!--
+save this file to /usr/share/vlc/lua/http/karaoke.html
+visit this page at 192.168.?.?:8080/karaoke.html
+VLC media player 3.0.23 Vetinari (revision 3.0.23-2-0-g79128878dd)
+set loop off: ie stop playing after last song on playlist
+tested on raspberrypi 4 with resolution up to 1080p
+tested on raspberrypi 3 with resolution up to 480p
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VLC KARAOKE</title>
+<style>
+root {
+	display: block;
+}
+body {
+	font: 11pt Helvetica, Arial, sans-serif;
+	background-color:#EEE;
+	margin: 0px;
+}
+footer {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0;
+}
+h1 {
+	font: 42pt Helvetica, Arial, sans-serif;
+	text-align: center;
+}
+h2 {
+	font: 30pt Helvetica, Arial, sans-serif;
+	text-align: center;
+}
+button {
+	font: 36pt Helvetica, Arial, sans-serif;
+}
+button.selected {
+	background-color: white;
+}
+.label {
+	font: 30pt Helvetica, Arial, sans-serif;
+}
+.control {
+	font: 70pt Helvetica, Arial, sans-serif;
+}
+
+.browser-container {
+	width: 100%;
+	height: 1300px;
+	border: 1px solid #ccc;
+	overflow-y: auto;
+	font-family: sans-serif;
+	background: #fafafa
+}
+.file-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.file-item {
+	font: 40pt Helvetica, Arial, sans-serif;
+	padding: 10px 15px;
+	border-bottom: 1px solid #eee;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.file-item.selected {
+	background-color: #0078d7;
+	color: white;
+}
+</style>
+<script type="text/javascript">
+//type:leaf, duration:236, name:life.mp3, current:current, ro:rw, id:3, url:file:///home/alex/life.mp3
+//repeat:false, random:false, length:0, currentplid:-1, time:0, state:stop, loop:false, position:0
+//currentplid:3, state:playing, length:292, repeat:false, time:10 
+var root = '/home/alex/karaoke';
+async function sendCommand(params) {
+    try {
+        const response = await fetch('/requests/status.json?command=' + params);
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        data = await response.json();
+        console.log(data);
+    } catch (error) {
+        console.error('Fetch operation failed:', error);
+    }
+}
+
+function removeExtension(filename) {
+	const lastDotIndex = filename.indexOf('.');
+	if (lastDotIndex === -1) return filename;
+	return filename.substring(0, lastDotIndex);
+}
+
+var currentplid;
+var playlist = [];
+var _playlist;		// shadow playlist
+async function fetchStatus() {
+	try {
+		const response = await fetch('/requests/status.json');
+		if (!response.ok) {
+			throw new Error(`HTTP error! Status: ${response.status}`);
+		}
+		const data = await response.json();
+		if (data.currentplid == -1) {
+			Current.innerHTML = "Pick a song!";
+			renderPlaylist();
+		}
+		_playlist.forEach(item => {
+			if (item.id == data.currentplid) {
+				currentplid = data.currentplid;
+				Current.innerHTML = removeExtension(item.name);
+			}
+		});
+		Progress.value = data.time;
+		if (data.length > 0) Progress.max = data.length;
+	} catch (error) {
+		console.error('Fetch operation failed:', error);
+	}
+}
+async function fetchPlaylist() {
+	try {
+		const response = await fetch('/requests/playlist.json');
+		if (!response.ok) {
+			throw new Error(`HTTP error! Status: ${response.status}`);
+		}
+		const data = await response.json();
+		_playlist = data.children[0].children;
+	} catch (error) {
+		console.error('Fetch operation failed:', error);
+	}
+}
+async function browse(dir) {
+	try {
+		const response = await fetch('/requests/browse.json?uri=' + dir);
+		if (!response.ok) {
+			throw new Error(`HTTP error! Status: ${response.status}`);
+		}
+		const data = await response.json();
+		renderFiles(data.element);
+	} catch (error) {
+		console.error('Fetch operation failed:', error);
+	}
+}
+function renderPlaylist() {
+	if (!Playlist.classList.contains('selected')) return;
+	let selected = -1;
+	document.querySelectorAll('.file-item').forEach(el => {
+		if (el.classList.contains('selected')) selected = el.dataset.id;
+	});
+	const container = document.getElementById('file-list');
+	container.innerHTML = '';
+	var show = false;
+	playlist.forEach(item => {
+		if (show) {
+			const li = document.createElement('li');
+			li.className = 'file-item';
+			li.textContent = removeExtension(item.name);
+			li.dataset.id = item.id;
+			if (item.id == selected) li.classList.add('selected');
+			li.addEventListener('click', () => {
+				document.querySelectorAll('.file-item').forEach(el =>
+					el.classList.remove('selected'));
+				li.classList.add('selected');
+			});
+			container.appendChild(li);
+		}
+		if ("current" in item) show = true;
+	});
+}
+function renderFiles(files) {
+	const container = document.getElementById('file-list');
+	container.innerHTML = '';
+	files.forEach(file => {
+		if ((file.type === 'dir')&&(file.path !== (root + '/..'))) {
+			const li = document.createElement('li');
+			li.className = 'file-item';
+			li.textContent = `📁 ${file.name}`;
+			li.dataset.path = file.path;
+			li.addEventListener('click', () => {
+				browse('file://' + li.dataset.path);
+				let i = li.dataset.path.indexOf(root.split('/').pop());
+				let path = li.dataset.path.substring(i);
+				i = path.length;
+				if (path[i-1] === '.') {
+					i = path.substring(0, i-3).indexOf('/');
+					path = path.substring(0, i);
+				}
+				Directory.innerHTML = path;
+			});
+			container.appendChild(li);
+		};
+	});
+	files.forEach(file => {
+		if (file.name.split('.').pop().toLowerCase() === 'mp4') {
+			const li = document.createElement('li');
+			li.className = 'file-item';
+			li.textContent = `🎬 ${removeExtension(file.name)}`;
+			li.dataset.uri = file.uri;
+			li.addEventListener('click', () => {
+				document.querySelectorAll('.file-item').forEach(el =>
+					el.classList.remove('selected'));
+				li.classList.add('selected');
+			});
+			container.appendChild(li);
+		};
+	});
+}
+function browseFolder() {
+	addDelete.innerHTML = 'ADD';
+	Playlist.classList.remove("selected");
+	Folder.classList.add("selected");
+	let n = root.lastIndexOf('/') + 1;
+	browse('file://' + root.substring(0, n) + Directory.innerHTML);
+}
+</script>
+</head>
+<body>
+<header>
+<h2 id="debug">VLC KARAOKE</h2>
+<h1 id="current">Pick a song!</h1>
+<progress id="progress" value="0" max="100" style="width: 100%;"></progress>
+<header>
+<main>
+<div id="file-browser" class="browser-container">
+	<ul id='file-list' class='file-list'></ul>
+</div>
+<div style="display: flex;">
+<button type="button" id="folder" onclick="browseFolder()">📁 Folder</button>
+<button type="button" id="playlist">📝 Playlist</button>
+<button type="button" id="addDelete" style="margin-left: auto;"></button>
+</div>
+<div id="directory" class="label" style="height: 180px;"></div>
+</main>
+<footer>
+<div style="text-align: center; display: flex; width: 100%;">
+<button type="button" onclick="sendCommand('audio_track&val=1')" style="margin-right: auto;">🎤 KARAOKE</button>
+<button type="button" class="control" onclick="sendCommand('pl_play&id=' + currentplid)">⏮️</button>
+<button type="button" class="control" onclick="sendCommand('pl_pause')">⏯️</button>
+<button type="button" class="control" onclick="sendCommand('pl_next')">⏭️</button>
+<button type="button" onclick="sendCommand('audio_track&val=2')" style="margin-left: auto;">DEMO 🎧</button>
+</div>
+</footer>
+<script type="text/javascript">
+const addDelete = document.getElementById('addDelete');
+addDelete.addEventListener('click', () => {
+	const selected = document.querySelectorAll("li.selected")[0];
+	if (addDelete.innerHTML === 'ADD') {
+		sendCommand('in_enqueue&input=' + selected.dataset.uri);
+		selected.classList.remove('selected');
+		sendCommand('pl_play');
+	} else {
+		selected.textContent = 'DELETING';
+		sendCommand('pl_delete&id=' + selected.dataset.id);
+	}
+});
+const Debug = document.getElementById('debug');
+const Current = document.getElementById('current');
+const Progress = document.getElementById('progress');
+const Directory = document.getElementById('directory');
+const Folder = document.getElementById('folder');
+const Playlist = document.getElementById('playlist');
+Directory.innerHTML = root.split('/').pop();
+Playlist.addEventListener('click', () => {
+	addDelete.innerHTML = 'DELETE';
+	Folder.classList.remove("selected");
+	Playlist.classList.add("selected");
+	renderPlaylist();
+});
+setInterval(() => {
+	fetchPlaylist();
+	fetchStatus();
+	if (JSON.stringify(playlist) !== JSON.stringify(_playlist)) {
+		playlist = _playlist;
+		renderPlaylist();
+	}
+}, 1000);
+browseFolder();
+</script>
+</body>
+</html>
