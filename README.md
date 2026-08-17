@@ -5,7 +5,7 @@ Adding songs to playlist of VLC player via mobile phones
 
 ### Download video with best resolution 1080 at most
 ```
-yt-dlp -f 'bestvideo[height<=1080]+best[height<=1080]' --merge-output-format mp4 https://youtu.be/xyz?ab=xxxxxx
+yt-dlp -f 'bestvideo[height<=1080]+bestaudio/best[height<=1080]' --merge-output-format mp4 https://youtu.be/xyz?ab=xxxxxx
 ```
 
 ### Extract audio track in aac format
